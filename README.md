@@ -25,7 +25,7 @@ npm start            # http://127.0.0.1:8000  (builds first if dist/ is missing)
 | `npm run build` | Production build into `dist/` |
 | `npm start` | Serves the built app and the API from PHP on one port |
 
-Useful settings (environment variables): `API_PORT` (default 8000), `WEB_PORT` (default 5173), and `PHP_BIN` to select a specific PHP executable. On Windows, the launcher automatically checks the standard XAMPP location (`C:\xampp\php\php.exe`); set `PHP_BIN` if XAMPP is installed elsewhere or you need a different PHP executable.
+Useful settings (environment variables): `API_PORT` (default 8000), `WEB_PORT` (default 5173), and `PHP_BIN` when PHP is not on your PATH, e.g. `PHP_BIN="C:\xampp\php\php.exe" npm run dev`.
 
 First run: edit the database credentials in `config.php`, then open `http://127.0.0.1:8000/setup.php` once (delete it afterwards). The first database connection also runs the additive migration.
 
