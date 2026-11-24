@@ -1,0 +1,24 @@
+<?php
+declare(strict_types=1);
+require __DIR__ . '/includes/lib.php';$user=require_admin();$pdo=db();$errors=[];
+if($_SERVER['REQUEST_METHOD']==='POST'){
+ check_csrf();$do=(string)($_POST['do']??'');
+ if($do==='assign'){
+  $cid=(int)($_POST['college_id']??0);$email=strtolower(trim((string)($_POST['email']??'')));$start=trim((string)($_POST['start_date']??date('Y-m-d')));
+  $d=DateTime::createFromFormat('Y-m-d',$start);
+  if($cid<1||!filter_var($email,FILTER_VALIDATE_EMAIL)||!$d||$d->format('Y-m-d')!==$start)$errors[]='Select a college, enter a valid WMSU account email, and choose a valid start date.';
+  if(!$errors){$q=$pdo->prepare('SELECT a.account_id,a.student_id,s.college,c.college_id FROM user_account a JOIN student s ON s.student_id=a.student_id JOIN college c ON c.college_name=s.college WHERE a.email=?');$q->execute([$email]);$target=$q->fetch();
+   if(!$target)$errors[]='No registered student account was found for that email.';
+   elseif((int)$target['college_id']!==$cid)$errors[]='The selected account belongs to a different college. A Mayor must be assigned from the same college.';
+   else{$pdo->beginTransaction();try{$pdo->prepare('UPDATE college_mayor SET is_active=0,end_date=CURDATE() WHERE is_active=1 AND (college_id=? OR account_id=?)')->execute([$cid,$target['account_id']]);$pdo->prepare('INSERT INTO college_mayor (college_id,account_id,assigned_by,start_date,is_active) VALUES (?,?,?,?,1)')->execute([$cid,$target['account_id'],$user['account_id'],$start]);audit_event((int)$user['account_id'],$cid,'Assigned Mayor','college_mayor',(int)$pdo->lastInsertId(),[],['account_id'=>(int)$target['account_id'],'start_date'=>$start]);$pdo->commit();flash('ok','College Mayor assignment saved.');redirect('mayors.php');}catch(Throwable $e){$pdo->rollBack();throw $e;}}
+  }
+ }elseif($do==='remove'){$id=(int)($_POST['assignment_id']??0);$q=$pdo->prepare('SELECT college_id,account_id FROM college_mayor WHERE assignment_id=? AND is_active=1');$q->execute([$id]);$old=$q->fetch();$pdo->prepare('UPDATE college_mayor SET is_active=0,end_date=CURDATE() WHERE assignment_id=? AND is_active=1')->execute([$id]);if($old)audit_event((int)$user['account_id'],(int)$old['college_id'],'Removed Mayor','college_mayor',$id,$old,['is_active'=>0]);flash('ok','Mayor assignment ended.');redirect('mayors.php');}
+}
+$colleges=$pdo->query('SELECT college_id,college_name FROM college ORDER BY college_name')->fetchAll();
+$rows=$pdo->query('SELECT cm.*,c.college_name,a.email, s.first_name,s.last_name FROM college_mayor cm JOIN college c ON c.college_id=cm.college_id JOIN user_account a ON a.account_id=cm.account_id LEFT JOIN student s ON s.student_id=a.student_id ORDER BY cm.is_active DESC,c.college_name,cm.start_date DESC')->fetchAll();
+page_start('Mayor assignments','mayors'); ?>
+<div class="head"><div><h1>College Mayor assignments</h1><p class="muted">The university administrator controls only Mayor assignments. Each Mayor must be a registered student of the assigned college.</p></div></div>
+<?php if($errors): ?><div class="flash err"><ul><?php foreach($errors as $er)echo'<li>'.e($er).'</li>';?></ul></div><?php endif;?>
+<section class="card"><h2>Assign or reassign a Mayor</h2><form method="post" class="stack"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="do" value="assign"><label>College<select name="college_id" required><option value="">Choose college</option><?php foreach($colleges as $c): ?><option value="<?=(int)$c['college_id']?>"><?=e($c['college_name'])?></option><?php endforeach;?></select></label><label>Mayor’s WMSU account email<input type="email" name="email" required placeholder="student@wmsu.edu.ph"></label><label>Start date<input type="date" name="start_date" value="<?=e(date('Y-m-d'))?>" required></label><button class="btn">Save Mayor assignment</button></form></section>
+<section class="card"><h2>Assignment history</h2><div class="tablewrap"><table><thead><tr><th>College</th><th>Mayor</th><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead><tbody><?php foreach($rows as $r): ?><tr><td><?=e($r['college_name'])?></td><td><?=e(trim(($r['first_name']??'').' '.($r['last_name']??''))?:$r['email'])?><br><small class="muted"><?=e($r['email'])?></small></td><td><?=e($r['start_date'])?></td><td><?=e($r['end_date']??'—')?></td><td><?= $r['is_active']?'<span class="pill approved">Active</span>':'<span class="pill closed">Ended</span>' ?></td><td><?php if($r['is_active']): ?><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="do" value="remove"><input type="hidden" name="assignment_id" value="<?=(int)$r['assignment_id']?>"><button class="btn ghost small">End assignment</button></form><?php endif;?></td></tr><?php endforeach;?><?php if(!$rows): ?><tr><td colspan="6" class="empty">No Mayor assignments yet.</td></tr><?php endif;?></tbody></table></div></section>
+<?php page_end(); ?>

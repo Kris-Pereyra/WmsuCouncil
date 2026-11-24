@@ -1,0 +1,7 @@
+node_modules/
+dist/
+uploads/avatars/*
+uploads/payment-proofs/*
+!uploads/avatars/.htaccess
+!uploads/payment-proofs/.htaccess
+*.log

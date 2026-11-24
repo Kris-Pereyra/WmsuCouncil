@@ -1,0 +1,10 @@
+# Apache (XAMPP): keep the front-end source and tooling files private.
+Options -Indexes
+<IfModule mod_authz_core.c>
+  <FilesMatch "^(package(-lock)?\.json|vite\.config\.js|router\.php|\.gitignore)$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<IfModule mod_alias.c>
+  RedirectMatch 404 (^|/)(node_modules|src|scripts)(/|$)
+</IfModule>
